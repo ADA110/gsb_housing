@@ -4,3 +4,5 @@ dist
 .env.local
 .vercel
 data.json
+.DS_Store
+.claude/
