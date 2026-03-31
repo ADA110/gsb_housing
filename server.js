@@ -49,6 +49,14 @@ async function initDB() {
     )
   `;
   await sql`
+    CREATE TABLE IF NOT EXISTS ip_rate_limits (
+      ip TEXT NOT NULL,
+      window BIGINT NOT NULL,
+      count INTEGER DEFAULT 1,
+      PRIMARY KEY (ip, window)
+    )
+  `;
+  await sql`
     CREATE TABLE IF NOT EXISTS posts (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
@@ -79,6 +87,37 @@ async function initDB() {
 
 // Run initDB at module load (top-level await, works with ES modules)
 await initDB();
+
+// ─── IP RATE LIMITING ───
+const IP_LIMIT = 60;           // requests per window
+const IP_WINDOW = 60 * 1000;  // 1 minute
+
+async function ipRateLimit(req, res, next) {
+  const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress || "unknown").trim();
+  const window = Math.floor(Date.now() / IP_WINDOW);
+
+  try {
+    const result = await sql`
+      INSERT INTO ip_rate_limits (ip, window, count)
+      VALUES (${ip}, ${window}, 1)
+      ON CONFLICT (ip, window) DO UPDATE SET count = ip_rate_limits.count + 1
+      RETURNING count
+    `;
+    if (result[0].count > IP_LIMIT) {
+      return res.status(429).json({ error: "Too many requests. Please try again later." });
+    }
+    // Occasionally clean up old windows (1% of requests)
+    if (Math.random() < 0.01) {
+      sql`DELETE FROM ip_rate_limits WHERE window < ${window - 2}`.catch(() => {});
+    }
+  } catch (err) {
+    console.error("IP rate limit error:", err);
+    // Don't block requests if rate limiting fails
+  }
+  next();
+}
+
+app.use("/api", ipRateLimit);
 
 // ─── AUTH HELPER ───
 async function authenticate(req) {
