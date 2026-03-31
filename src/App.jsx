@@ -74,6 +74,7 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [form, setForm] = useState({});
+  const [editingPostId, setEditingPostId] = useState(null);
 
   // ─── INITIAL LOAD ───
   useEffect(() => {
@@ -232,8 +233,22 @@ export default function App() {
 
   function startPost(type) {
     if (!user) { alert("Please sign in first"); return; }
+    setEditingPostId(null);
     setForm({ city: selectedCity?.name || "", neighborhoods: "", moveIn: "", moveOut: "", budgetMax: "", price: "", bedsAvail: "1", genderPref: "No preference", furnished: "Either", beds: [], baths: [], bathPrivacy: "Shared bath OK", lifestyle: [], note: "", description: "", address: "" });
     setView(type === "search" ? "post-search" : "post-sublet");
+  }
+
+  function startEdit(post) {
+    setEditingPostId(post.id);
+    setForm({
+      city: post.city, moveIn: post.moveIn, moveOut: post.moveOut, lifestyle: post.lifestyle || [],
+      neighborhoods: post.neighborhoods || "", budgetMax: post.budgetMax || "", genderPref: post.genderPref || "No preference",
+      furnished: post.furnished || "Either", beds: post.beds || (post.type === "search" ? [] : ""),
+      baths: post.baths || (post.type === "search" ? [] : ""), bathPrivacy: post.bathPrivacy || "Shared bath OK",
+      note: post.note || "", address: post.address || "", price: post.price || "",
+      bedsAvail: post.bedsAvail || "1", description: post.description || "",
+    });
+    setView(post.type === "search" ? "post-search" : "post-sublet");
   }
 
   async function submitPost(type) {
@@ -246,7 +261,12 @@ export default function App() {
       Object.assign(data, { address: form.address, price: form.price, bedsAvail: form.bedsAvail, beds: form.beds, baths: form.baths, bathPrivacy: form.bathPrivacy, furnished: form.furnished, description: form.description });
     }
     try {
-      await api("/api/posts", { method: "POST", body: JSON.stringify(data) });
+      if (editingPostId) {
+        await api(`/api/posts?id=${editingPostId}`, { method: "PUT", body: JSON.stringify(data) });
+        setEditingPostId(null);
+      } else {
+        await api("/api/posts", { method: "POST", body: JSON.stringify(data) });
+      }
       await refreshPosts();
       const city = CITIES.find(c => c.name === form.city);
       if (city) { openCity(city); setTab(type === "search" ? "looking" : "sublets"); } else { setView("cities"); }
@@ -459,7 +479,7 @@ export default function App() {
                 {item.phone && <a href={`tel:${item.phone}`} style={S.ctL}>📱 {item.phone}</a>}
               </div>
             </div>
-            {user.email === item.email && <div style={{ marginTop: 12, textAlign: "right" }}><button style={S.delBtn} onClick={e => { e.stopPropagation(); deletePost(item.id); }}>Remove Post</button></div>}
+            {user.email === item.email && <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", gap: 8 }}><button style={{...S.delBtn, color: "#4361b8", borderColor: "#c0c8e8"}} onClick={e => { e.stopPropagation(); startEdit(item); }}>Edit</button><button style={S.delBtn} onClick={e => { e.stopPropagation(); deletePost(item.id); }}>Remove Post</button></div>}
           </div>
         )}
       </div>
@@ -501,7 +521,7 @@ export default function App() {
                 {item.phone && <a href={`tel:${item.phone}`} style={S.ctL}>📱 {item.phone}</a>}
               </div>
             </div>
-            {user.email === item.email && <div style={{ marginTop: 12, textAlign: "right" }}><button style={S.delBtn} onClick={e => { e.stopPropagation(); deletePost(item.id); }}>Remove Post</button></div>}
+            {user.email === item.email && <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", gap: 8 }}><button style={{...S.delBtn, color: "#4361b8", borderColor: "#c0c8e8"}} onClick={e => { e.stopPropagation(); startEdit(item); }}>Edit</button><button style={S.delBtn} onClick={e => { e.stopPropagation(); deletePost(item.id); }}>Remove Post</button></div>}
           </div>
         )}
       </div>
@@ -564,8 +584,8 @@ export default function App() {
       <div style={S.box}>
         <div style={S.fWrap}>
           <button style={S.back} onClick={() => selectedCity ? openCity(selectedCity) : setView("cities")}>← Back</button>
-          <h1 style={{...S.h1, fontSize: 28}}>{isS ? "I'm Looking for Housing" : "List a Sublet"}</h1>
-          <p style={S.sub}>{isS ? "Tell us where you're headed and what you need. We'll help you find classmates with matching plans." : "Share your place with classmates who need housing."}</p>
+          <h1 style={{...S.h1, fontSize: 28}}>{editingPostId ? "Edit Post" : (isS ? "I'm Looking for Housing" : "List a Sublet")}</h1>
+          <p style={S.sub}>{editingPostId ? "Update your post details below." : (isS ? "Tell us where you're headed and what you need. We'll help you find classmates with matching plans." : "Share your place with classmates who need housing.")}</p>
           <div style={S.fRow}><label style={S.lbl}>City</label><select style={{...S.inp, cursor: "pointer"}} value={form.city} onChange={e => setForm({...form, city: e.target.value})}><option value="">Select a city</option>{CITIES.map(c => <option key={c.name} value={c.name}>{c.emoji} {c.name}</option>)}</select></div>
           {isS ? (
             <div style={S.fRow}>
@@ -603,7 +623,7 @@ export default function App() {
           {isS && (<div style={S.fRow}><label style={S.lbl}>Gender Preference</label><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{GENDER_PREFS.map(g => <button key={g} style={{...S.tOpt, ...(form.genderPref === g ? S.tAct : {})}} onClick={() => setForm({...form, genderPref: g})}>{g}</button>)}</div></div>)}
           <div style={S.fRow}><label style={S.lbl}>Lifestyle Tags</label><div style={S.tSel}>{LIFESTYLE_TAGS.map(t => <button key={t} style={{...S.tOpt, ...((form.lifestyle || []).includes(t) ? S.tAct : {})}} onClick={() => { const ls = form.lifestyle || []; setForm({...form, lifestyle: ls.includes(t) ? ls.filter(x => x !== t) : [...ls, t]}); }}>{t}</button>)}</div></div>
           <div style={S.fRow}><label style={S.lbl}>{isS ? "Notes (anything else classmates should know)" : "Description"}</label><textarea style={S.tArea} placeholder={isS ? "What company, any other preferences, etc." : "Tell classmates about the apartment..."} value={isS ? (form.note || "") : (form.description || "")} onChange={e => setForm({...form, [isS ? "note" : "description"]: e.target.value})} /></div>
-          <button style={{...S.btn, marginTop: 8}} onClick={() => submitPost(type)}>{isS ? "Post Housing Search" : "List Sublet"} →</button>
+          <button style={{...S.btn, marginTop: 8}} onClick={() => submitPost(type)}>{editingPostId ? "Save Changes" : (isS ? "Post Housing Search" : "List Sublet")} →</button>
         </div>
       </div>
     );
@@ -621,7 +641,7 @@ export default function App() {
           <div key={p.id} style={S.card}>
             <div style={S.cH}>
               <div><span style={{ fontSize: 11, fontWeight: 700, color: p.type === "search" ? "#c45d3e" : "#2d7a2d", textTransform: "uppercase", letterSpacing: "0.5px" }}>{p.type === "search" ? "Looking" : "Sublet"}</span><div style={S.cNm}>{p.city}</div></div>
-              <button style={S.delBtn} onClick={() => deletePost(p.id)}>Remove</button>
+              <div style={{ display: "flex", gap: 8 }}><button style={{...S.delBtn, color: "#4361b8", borderColor: "#c0c8e8"}} onClick={() => startEdit(p)}>Edit</button><button style={S.delBtn} onClick={() => deletePost(p.id)}>Remove</button></div>
             </div>
             <div style={S.meta}>
               <span>📅 {formatDate(p.moveIn)} – {formatDate(p.moveOut)}</span>

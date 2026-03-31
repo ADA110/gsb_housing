@@ -364,6 +364,58 @@ app.post("/api/posts", async (req, res) => {
   return res.status(201).json({ post: rowToPost(newRows[0]) });
 });
 
+// PUT /api/posts
+app.put("/api/posts", async (req, res) => {
+  const email = await authenticate(req);
+  if (!email) return res.status(401).json({ error: "Not authenticated" });
+
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ error: "Post ID is required" });
+
+  const rows = await sql`SELECT * FROM posts WHERE id = ${id}`;
+  if (rows.length === 0) return res.status(404).json({ error: "Post not found" });
+  if (rows[0].email !== email) return res.status(403).json({ error: "You can only edit your own posts" });
+
+  const data = req.body;
+  if (!data.moveIn || !data.moveOut) return res.status(400).json({ error: "Missing required fields" });
+
+  if (rows[0].type === "search") {
+    await sql`
+      UPDATE posts SET
+        move_in = ${data.moveIn}, move_out = ${data.moveOut},
+        lifestyle = ${JSON.stringify(data.lifestyle || [])},
+        neighborhoods = ${data.neighborhoods || ""},
+        budget_max = ${parseInt(data.budgetMax) || 0},
+        gender_pref = ${data.genderPref || "No preference"},
+        furnished = ${data.furnished || "Either"},
+        beds = ${JSON.stringify(data.beds || [])},
+        baths = ${JSON.stringify(data.baths || [])},
+        bath_privacy = ${data.bathPrivacy || "Shared bath OK"},
+        note = ${data.note || ""}
+      WHERE id = ${id}
+    `;
+  } else {
+    if (!data.price) return res.status(400).json({ error: "Price is required for sublets" });
+    await sql`
+      UPDATE posts SET
+        move_in = ${data.moveIn}, move_out = ${data.moveOut},
+        lifestyle = ${JSON.stringify(data.lifestyle || [])},
+        address = ${data.address || ""},
+        price = ${parseInt(data.price) || 0},
+        beds_avail = ${parseInt(data.bedsAvail) || 1},
+        beds = ${JSON.stringify(data.beds || "")},
+        baths = ${JSON.stringify(data.baths || "")},
+        bath_privacy = ${data.bathPrivacy || "Shared bath"},
+        furnished = ${data.furnished || "Either"},
+        description = ${data.description || ""}
+      WHERE id = ${id}
+    `;
+  }
+
+  const updated = await sql`SELECT * FROM posts WHERE id = ${id}`;
+  return res.json({ post: rowToPost(updated[0]) });
+});
+
 // DELETE /api/posts
 app.delete("/api/posts", async (req, res) => {
   const email = await authenticate(req);
