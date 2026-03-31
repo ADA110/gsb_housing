@@ -51,9 +51,9 @@ async function initDB() {
   await sql`
     CREATE TABLE IF NOT EXISTS ip_rate_limits (
       ip TEXT NOT NULL,
-      window BIGINT NOT NULL,
+      time_window BIGINT NOT NULL,
       count INTEGER DEFAULT 1,
-      PRIMARY KEY (ip, window)
+      PRIMARY KEY (ip, time_window)
     )
   `;
   await sql`
@@ -94,13 +94,13 @@ const IP_WINDOW = 60 * 1000;  // 1 minute
 
 async function ipRateLimit(req, res, next) {
   const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress || "unknown").trim();
-  const window = Math.floor(Date.now() / IP_WINDOW);
+  const timeWindow = Math.floor(Date.now() / IP_WINDOW);
 
   try {
     const result = await sql`
-      INSERT INTO ip_rate_limits (ip, window, count)
-      VALUES (${ip}, ${window}, 1)
-      ON CONFLICT (ip, window) DO UPDATE SET count = ip_rate_limits.count + 1
+      INSERT INTO ip_rate_limits (ip, time_window, count)
+      VALUES (${ip}, ${timeWindow}, 1)
+      ON CONFLICT (ip, time_window) DO UPDATE SET count = ip_rate_limits.count + 1
       RETURNING count
     `;
     if (result[0].count > IP_LIMIT) {
@@ -108,7 +108,7 @@ async function ipRateLimit(req, res, next) {
     }
     // Occasionally clean up old windows (1% of requests)
     if (Math.random() < 0.01) {
-      sql`DELETE FROM ip_rate_limits WHERE window < ${window - 2}`.catch(() => {});
+      sql`DELETE FROM ip_rate_limits WHERE time_window < ${timeWindow - 2}`.catch(() => {});
     }
   } catch (err) {
     console.error("IP rate limit error:", err);
