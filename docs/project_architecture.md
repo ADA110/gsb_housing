@@ -11,11 +11,19 @@ Helps Stanford GSB MBA students (class years 2026/2027) find housing matches: ei
 
 ## Stack
 - **Frontend**: React 18 + Vite, single file `src/App.jsx`
-- **Backend**: Express (Node.js), single file `server.js`, port 3001
-- **Database**: `data.json` flat JSON file (no external DB)
+- **Backend**: Express (Node.js), single file `server.js`, port 3001 locally
+- **Database**: Neon Postgres (via Vercel Marketplace) — migrated from `data.json`
 - **Bundler/Dev**: Vite dev server port 5173, proxies `/api/*` → Express at 3001
-- **Email**: Resend (optional via RESEND_API_KEY env var); without it, codes print to terminal
+- **Email**: Resend via `adatest.website` domain (RESEND_API_KEY + EMAIL_FROM env vars); without RESEND_API_KEY, codes print to terminal
 - **Start**: `npm run dev` uses `concurrently` to run both servers
+- **Deployed**: Vercel (GitHub auto-deploy on push to main)
+
+## Vercel Deployment
+- `vercel.json` routes `/api/*` → `api/index.js` (serverless function) and everything else → `dist/index.html`
+- `api/index.js` re-exports the Express app from `server.js`
+- `server.js` exports `app` as default; only calls `app.listen()` when `!process.env.VERCEL`
+- Vite builds frontend to `dist/`, served as static files by Vercel CDN
+- `DATABASE_URL` and all Neon/Resend env vars auto-provisioned via Vercel Marketplace
 
 ## Auth Flow
 1. User enters `@stanford.edu` email → POST `/api/send-code` (rate-limited 1/60s, codes expire 10min)
@@ -23,13 +31,15 @@ Helps Stanford GSB MBA students (class years 2026/2027) find housing matches: ei
 3. Token stored in `localStorage` as `gsb-token`, sent as `Authorization: Bearer <token>` on all API calls
 4. On first login (no profile), user fills name/phone/classYear → POST `/api/user`
 
-## Data Store (`data.json`)
-Keys:
-- `codes`: `{ [email]: { code, expiresAt } }` — pending verification codes
-- `rateLimits`: `{ [email]: { expiresAt } }` — 60s rate limit per email
-- `sessions`: `{ [token]: { email, expiresAt } }` — active sessions (30 days)
-- `users`: `{ [email]: { name, email, phone, classYear } }` — user profiles
-- `posts`: flat array of post objects
+## Database (Neon Postgres)
+Tables (all created via `initDB()` on server startup using `CREATE TABLE IF NOT EXISTS`):
+- `users` — email (PK), name, phone, class_year
+- `sessions` — token (PK), email, expires_at (BIGINT ms timestamp)
+- `codes` — email (PK), code, expires_at
+- `rate_limits` — email (PK), expires_at
+- `posts` — all post fields; `beds`/`baths`/`lifestyle` stored as JSONB (arrays for search, strings for sublet)
+
+Snake_case in DB, camelCase in API responses — `rowToPost()` handles the mapping.
 
 ## Post Data Model
 
@@ -89,8 +99,17 @@ Filtering (client-side): date range, budget/price max, gender pref, furnished, b
 - `BATH_PRIVACY`: ["Private bath", "Shared bath OK"]
 - `GENDER_PREFS`: ["No preference", "Male", "Female", "Non-binary"]
 
-## Production
-- `npm run start` — runs Express only (serves built `dist/` as static files)
-- `npm run build` — Vite build to `dist/`
+## Email Setup
+- Domain: `adatest.website` (registered on Namecheap, verified with Resend)
+- Resend DNS records added to Namecheap Advanced DNS: DKIM TXT, SPF TXT, DMARC TXT (MX skipped — not needed for sending)
+- `EMAIL_FROM` env var set to sender address using `adatest.website` domain
+- `RESEND_API_KEY` set in Vercel env vars
 
-**Why:** This is a simple local-first app; no external DB, no complex infra — designed for rapid iteration within a small GSB community.
+## Local Dev Notes
+- `vercel env pull .env.local` syncs all env vars locally (including DATABASE_URL, RESEND_API_KEY)
+- To test without Resend locally (print codes to terminal): remove RESEND_API_KEY from `.env.local`
+- `.env.local` is gitignored
+
+## Production
+- `npm run build` — Vite build to `dist/`
+- Vercel auto-deploys on every push to `main` via GitHub integration
