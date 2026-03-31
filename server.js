@@ -157,12 +157,12 @@ app.post("/api/send-code", async (req, res) => {
     SELECT expires_at FROM rate_limits WHERE email = ${email} AND expires_at > ${Date.now()}
   `;
   if (rateRows.length > 0) {
-    return res.status(429).json({ error: "Please wait 60 seconds before requesting another code" });
+    return res.status(429).json({ error: "Please wait 30 seconds before requesting another code" });
   }
 
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const codeExpiry = Date.now() + 10 * 60 * 1000;
-  const rateExpiry = Date.now() + 60 * 1000;
+  const rateExpiry = Date.now() + 30 * 1000;
 
   await sql`
     INSERT INTO codes (email, code, expires_at) VALUES (${email}, ${code}, ${codeExpiry})
