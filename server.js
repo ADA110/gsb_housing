@@ -75,8 +75,10 @@ async function initDB() {
       description TEXT
     )
   `;
-  console.log("✅ Database ready");
 }
+
+// Run initDB at module load (top-level await, works with ES modules)
+await initDB();
 
 // ─── AUTH HELPER ───
 async function authenticate(req) {
@@ -339,21 +341,13 @@ app.delete("/api/posts", async (req, res) => {
   return res.json({ success: true });
 });
 
-// ─── SERVE STATIC IN PRODUCTION ───
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "dist")));
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "dist", "index.html"));
-  });
-}
-
-// ─── START ───
-initDB().then(() => {
+// ─── LOCAL DEV: listen on port ───
+// On Vercel, the app is exported as a serverless function (no app.listen needed)
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`\n🏠 gsbhouse server running at http://localhost:${PORT}`);
     console.log(`🖥️  Frontend dev server at http://localhost:5173\n`);
   });
-}).catch((err) => {
-  console.error("Failed to initialize database:", err);
-  process.exit(1);
-});
+}
+
+export default app;
