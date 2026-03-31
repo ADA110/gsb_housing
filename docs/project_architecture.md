@@ -26,7 +26,7 @@ Helps Stanford GSB MBA students (class years 2026/2027) find housing matches: ei
 - `DATABASE_URL` and all Neon/Resend env vars auto-provisioned via Vercel Marketplace
 
 ## Auth Flow
-1. User enters `@stanford.edu` email → POST `/api/send-code` (rate-limited 1/60s, codes expire 10min)
+1. User enters `@stanford.edu` email → POST `/api/send-code` (rate-limited 1/30s, codes expire 10min)
 2. User enters 6-digit code → POST `/api/verify-code` → returns Bearer token (30-day session)
 3. Token stored in `localStorage` as `gsb-token`, sent as `Authorization: Bearer <token>` on all API calls
 4. On first login (no profile), user fills name/phone/classYear → POST `/api/user`
@@ -37,6 +37,7 @@ Tables (all created via `initDB()` on server startup using `CREATE TABLE IF NOT 
 - `sessions` — token (PK), email, expires_at (BIGINT ms timestamp)
 - `codes` — email (PK), code, expires_at
 - `rate_limits` — email (PK), expires_at
+- `ip_rate_limits` — ip + time_window (composite PK), count; enforces 60 req/min per IP
 - `posts` — all post fields; `beds`/`baths`/`lifestyle` stored as JSONB (arrays for search, strings for sublet)
 
 Snake_case in DB, camelCase in API responses — `rowToPost()` handles the mapping.
@@ -77,6 +78,7 @@ Snake_case in DB, camelCase in API responses — `rowToPost()` handles the mappi
 - `DELETE /api/user` — logout / delete session
 - `GET /api/posts` — get all posts (public)
 - `POST /api/posts` — create post (auth required, profile required)
+- `PUT /api/posts?id=<id>` — edit own post (auth required, ownership verified)
 - `DELETE /api/posts?id=<id>` — delete own post (auth required)
 
 ## Frontend Architecture (`src/App.jsx`)
@@ -105,9 +107,30 @@ Filtering (client-side): date range, budget/price max, gender pref, furnished, b
 - `EMAIL_FROM` env var set to sender address using `adatest.website` domain
 - `RESEND_API_KEY` set in Vercel env vars
 
+## IP Rate Limiting
+All `/api/*` routes are protected by an IP rate limiter middleware:
+- Uses the `ip_rate_limits` table with fixed 1-minute windows (`Math.floor(Date.now() / 60000)`)
+- Atomically increments via `INSERT ... ON CONFLICT DO UPDATE` and returns the new count
+- Returns HTTP 429 if count exceeds 60 requests/window
+- Fails open (if the DB call throws, the request is allowed through)
+- 1% chance cleanup: deletes rows from previous windows to prevent table bloat
+
+## DEV_MODE
+Set `DEV_MODE=true` in `.env.local` to skip Resend and print verification codes to terminal instead. This avoids having to remove `RESEND_API_KEY` when running locally after a `vercel env pull`.
+
+## Testing
+- **Framework**: Vitest (ESM-compatible) + supertest for HTTP assertions
+- **Run**: `npm test` (single run) or `npm run test:watch`
+- **Strategy**: `vi.mock('@neondatabase/serverless')` hoisted before `server.js` import; all SQL calls return a mock `sql` function
+- **Default mock**: `[{ count: 1 }]` — satisfies ipRateLimit (count ≤ 60) and most queries
+- **Per-test overrides**: `sql.mockResolvedValueOnce(...)` queues return values in call order
+- **Auth helper**: `mockAuth(sql)` in `tests/helpers.js` queues the ip-limit and session calls
+- **beforeEach**: `sql.mockReset()` (not `mockClear`) to flush leftover Once values between tests
+- **Port conflicts**: `app.listen()` is skipped when `process.env.VITEST` is set
+
 ## Local Dev Notes
 - `vercel env pull .env.local` syncs all env vars locally (including DATABASE_URL, RESEND_API_KEY)
-- To test without Resend locally (print codes to terminal): remove RESEND_API_KEY from `.env.local`
+- Add `DEV_MODE=true` to `.env.local` after pulling to keep codes printing to terminal
 - `.env.local` is gitignored
 
 ## Production

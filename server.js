@@ -131,7 +131,7 @@ async function authenticate(req) {
 }
 
 // ─── POST MAPPER ───
-function rowToPost(row) {
+export function rowToPost(row) {
   const post = {
     id: row.id,
     type: row.type,
@@ -434,7 +434,7 @@ app.delete("/api/posts", async (req, res) => {
 
 // ─── LOCAL DEV: listen on port ───
 // On Vercel, the app is exported as a serverless function (no app.listen needed)
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.VITEST) {
   app.listen(PORT, () => {
     console.log(`\n🏠 gsbhouse server running at http://localhost:${PORT}`);
     console.log(`🖥️  Frontend dev server at http://localhost:5173\n`);

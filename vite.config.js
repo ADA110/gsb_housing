@@ -15,4 +15,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  test: {
+    environment: 'node',
+    globals: true,
+    env: {
+      DATABASE_URL: 'postgres://test:test@localhost/test',
+    },
+  },
 })

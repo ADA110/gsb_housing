@@ -6,3 +6,4 @@ dist
 data.json
 .DS_Store
 .claude/
+.env*.local
