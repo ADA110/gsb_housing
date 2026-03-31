@@ -136,12 +136,12 @@ function rowToPost(row) {
 
 // ─── OPTIONAL: Resend for real emails ───
 let resend = null;
-if (process.env.RESEND_API_KEY) {
+if (process.env.RESEND_API_KEY && !process.env.DEV_MODE) {
   const { Resend } = await import("resend");
   resend = new Resend(process.env.RESEND_API_KEY);
   console.log("📧 Resend configured — codes will be emailed");
 } else {
-  console.log("📧 No RESEND_API_KEY — codes will be printed to terminal");
+  console.log("📧 DEV_MODE or no RESEND_API_KEY — codes will be printed to terminal");
 }
 
 // ─── ROUTES ───
