@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 
 const CITIES = [
   { name: "San Francisco", emoji: "🌉", state: "CA" },
+  { name: "South Bay", emoji: "💻", state: "CA" },
   { name: "New York", emoji: "🗽", state: "NY" },
   { name: "Chicago", emoji: "🏙️", state: "IL" },
   { name: "Los Angeles", emoji: "🌴", state: "CA" },
@@ -437,6 +438,8 @@ export default function App() {
     delBtn: { background: "none", border: "1px solid #e0c0b0", borderRadius: 8, padding: "6px 14px", fontSize: 12, color: "#c45d3e", cursor: "pointer", fontFamily: "inherit" },
     badge: { background: "#c45d3e", color: "#fff", borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 700, marginLeft: 8 },
     hint: { fontSize: 12, color: "#999", marginTop: 4 },
+    footer: { textAlign: "center", padding: "32px 24px 24px", fontSize: 12, color: "#c0bcb4" },
+    footerLink: { color: "#c0bcb4", textDecoration: "none", borderBottom: "1px solid #ddd9d0" },
   };
 
   // ─── ADMIN LOGIN ───
@@ -462,6 +465,7 @@ export default function App() {
             </button>
           </div>
         </div>
+        <div style={S.footer}>Made by <a href="https://github.com/ADA110/gsb_housing" target="_blank" rel="noopener noreferrer" style={S.footerLink}>Abhi Ashar, Austin Jia &amp; Shivam Kalkar</a></div>
       </div>
     );
   }
@@ -545,6 +549,7 @@ export default function App() {
             </>)}
           </div>
         </div>
+        <div style={S.footer}>Made by <a href="https://github.com/ADA110/gsb_housing" target="_blank" rel="noopener noreferrer" style={S.footerLink}>Abhi Ashar, Austin Jia &amp; Shivam Kalkar</a></div>
       </div>
     );
   }
@@ -870,6 +875,7 @@ export default function App() {
       : view === "post-sublet" ? renderPostForm("sublet")
       : view === "my-posts" ? renderMyPosts()
       : null}
+      <div style={S.footer}>Made by <a href="https://github.com/ADA110/gsb_housing" target="_blank" rel="noopener noreferrer" style={S.footerLink}>Abhi Ashar, Austin Jia &amp; Shivam Kalkar</a></div>
     </div>
   );
 }
