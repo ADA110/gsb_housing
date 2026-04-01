@@ -32,6 +32,14 @@ async function api(path, options = {}) {
   return data;
 }
 
+async function adminApi(path, options = {}, secret) {
+  const headers = { "Content-Type": "application/json", "X-Admin-Secret": secret };
+  const res = await fetch(path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
 function formatDate(d) {
   if (!d) return "";
   return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -75,6 +83,14 @@ export default function App() {
 
   const [form, setForm] = useState({});
   const [editingPostId, setEditingPostId] = useState(null);
+
+  const isAdminMode = new URLSearchParams(window.location.search).has("admin");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminSecretInput, setAdminSecretInput] = useState("");
+  const [adminSecret, setAdminSecret] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminPerson, setAdminPerson] = useState({ name: "", email: "", phone: "", classYear: "2026" });
 
   // ─── INITIAL LOAD ───
   useEffect(() => {
@@ -285,6 +301,79 @@ export default function App() {
     }
   }
 
+  async function handleAdminUnlock() {
+    if (!adminSecretInput) { setAdminError("Please enter the admin secret"); return; }
+    setAdminLoading(true);
+    setAdminError("");
+    try {
+      await adminApi("/api/admin/verify", {}, adminSecretInput);
+      setAdminSecret(adminSecretInput);
+      setAdminUnlocked(true);
+    } catch (err) {
+      setAdminError(err.message || "Invalid secret");
+    }
+    setAdminLoading(false);
+  }
+
+  function adminStartPost(type) {
+    setEditingPostId(null);
+    setAdminPerson({ name: "", email: "", phone: "", classYear: "2026" });
+    setForm({ city: "", neighborhoods: "", moveIn: "", moveOut: "", budgetMax: "", price: "", bedsAvail: "1", genderPref: "No preference", furnished: "Either", beds: [], baths: [], bathPrivacy: "Shared bath OK", lifestyle: [], note: "", description: "", address: "" });
+    setView(type === "search" ? "post-search" : "post-sublet");
+  }
+
+  function adminStartEdit(post) {
+    setEditingPostId(post.id);
+    setAdminPerson({ name: post.name, email: post.email, phone: post.phone || "", classYear: post.classYear });
+    setForm({
+      city: post.city, moveIn: post.moveIn, moveOut: post.moveOut, lifestyle: post.lifestyle || [],
+      neighborhoods: post.neighborhoods || "", budgetMax: post.budgetMax || "", genderPref: post.genderPref || "No preference",
+      furnished: post.furnished || "Either", beds: post.beds || (post.type === "search" ? [] : ""),
+      baths: post.baths || (post.type === "search" ? [] : ""), bathPrivacy: post.bathPrivacy || "Shared bath OK",
+      note: post.note || "", address: post.address || "", price: post.price || "",
+      bedsAvail: post.bedsAvail || "1", description: post.description || "",
+    });
+    setView(post.type === "search" ? "post-search" : "post-sublet");
+  }
+
+  async function adminDeletePost(id) {
+    if (!confirm("Delete this post?")) return;
+    try {
+      await adminApi(`/api/posts?id=${id}`, { method: "DELETE" }, adminSecret);
+      await refreshPosts();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
+  async function adminSubmitPost(type) {
+    if (!adminPerson.name || !adminPerson.email) { alert("Please fill in the name and email for the person"); return; }
+    const data = {
+      type, city: form.city, moveIn: form.moveIn, moveOut: form.moveOut, lifestyle: form.lifestyle || [],
+      personName: adminPerson.name, personEmail: adminPerson.email,
+      personPhone: adminPerson.phone, personClassYear: adminPerson.classYear,
+    };
+    if (type === "search") {
+      if (!form.city || !form.moveIn || !form.moveOut) { alert("Please fill in city and dates"); return; }
+      Object.assign(data, { neighborhoods: form.neighborhoods, budgetMax: form.budgetMax, genderPref: form.genderPref, furnished: form.furnished, beds: form.beds, baths: form.baths, bathPrivacy: form.bathPrivacy, note: form.note });
+    } else {
+      if (!form.city || !form.moveIn || !form.moveOut || !form.price) { alert("Please fill in city, dates, and price"); return; }
+      Object.assign(data, { address: form.address, price: form.price, bedsAvail: form.bedsAvail, beds: form.beds, baths: form.baths, bathPrivacy: form.bathPrivacy, furnished: form.furnished, description: form.description });
+    }
+    try {
+      if (editingPostId) {
+        await adminApi(`/api/posts?id=${editingPostId}`, { method: "PUT", body: JSON.stringify(data) }, adminSecret);
+        setEditingPostId(null);
+      } else {
+        await adminApi("/api/admin/posts", { method: "POST", body: JSON.stringify(data) }, adminSecret);
+      }
+      await refreshPosts();
+      setView("cities");
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  }
+
   const myPosts = user ? posts.filter(p => p.email === user.email) : [];
 
   // ─── STYLES ───
@@ -350,8 +439,35 @@ export default function App() {
     hint: { fontSize: 12, color: "#999", marginTop: 4 },
   };
 
+  // ─── ADMIN LOGIN ───
+  if (isAdminMode && !adminUnlocked) {
+    return (
+      <div style={S.app}>
+        <div style={S.header}><div style={S.logo}>gsb<span style={S.logoAcc}>house</span><span style={{ fontSize: 11, fontWeight: 400, color: "#999", marginLeft: 6 }}>admin</span></div></div>
+        <div style={S.authWrap}>
+          <div style={S.authCard}>
+            <div style={S.authH}>Admin Panel</div>
+            <div style={S.authP}>Enter the admin secret to manage posts.</div>
+            {adminError && <div style={S.errMsg}>{adminError}</div>}
+            <div style={S.fRow}>
+              <label style={S.lbl}>Admin Secret</label>
+              <input style={S.inp} type="password" placeholder="Enter admin secret" value={adminSecretInput}
+                onChange={e => { setAdminSecretInput(e.target.value); setAdminError(""); }}
+                onKeyDown={e => e.key === "Enter" && !adminLoading && handleAdminUnlock()}
+                autoFocus
+              />
+            </div>
+            <button style={adminLoading ? S.btnDisabled : S.btn} onClick={handleAdminUnlock} disabled={adminLoading}>
+              {adminLoading ? "Verifying..." : "Unlock →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ─── AUTH SCREENS ───
-  if (!user) {
+  if (!user && !adminUnlocked) {
     return (
       <div style={S.app}>
         <div style={S.header}><div style={S.logo}>gsb<span style={S.logoAcc}>house</span></div></div>
@@ -583,9 +699,22 @@ export default function App() {
     return (
       <div style={S.box}>
         <div style={S.fWrap}>
-          <button style={S.back} onClick={() => selectedCity ? openCity(selectedCity) : setView("cities")}>← Back</button>
+          <button style={S.back} onClick={() => isAdminMode ? setView("cities") : (selectedCity ? openCity(selectedCity) : setView("cities"))}>← Back</button>
           <h1 style={{...S.h1, fontSize: 28}}>{editingPostId ? "Edit Post" : (isS ? "I'm Looking for Housing" : "List a Sublet")}</h1>
           <p style={S.sub}>{editingPostId ? "Update your post details below." : (isS ? "Tell us where you're headed and what you need. We'll help you find classmates with matching plans." : "Share your place with classmates who need housing.")}</p>
+          {isAdminMode && (
+            <div style={{ marginBottom: 24, padding: 16, background: "#eef2ff", borderRadius: 10, border: "1px solid #c0cef8" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#4361b8", marginBottom: 12 }}>Posting on behalf of</div>
+              <div style={S.fGrid}>
+                <div style={S.fRow}><label style={S.lbl}>Full Name</label><input style={S.inp} placeholder="Student name" value={adminPerson.name} onChange={e => setAdminPerson({...adminPerson, name: e.target.value})} /></div>
+                <div style={S.fRow}><label style={S.lbl}>Email</label><input style={S.inp} placeholder="student@stanford.edu" value={adminPerson.email} onChange={e => setAdminPerson({...adminPerson, email: e.target.value})} /></div>
+              </div>
+              <div style={S.fGrid}>
+                <div style={S.fRow}><label style={S.lbl}>Phone (optional)</label><input style={S.inp} placeholder="(555) 123-4567" value={adminPerson.phone} onChange={e => setAdminPerson({...adminPerson, phone: e.target.value})} /></div>
+                <div style={S.fRow}><label style={S.lbl}>Class Year</label><select style={{...S.inp, cursor: "pointer"}} value={adminPerson.classYear} onChange={e => setAdminPerson({...adminPerson, classYear: e.target.value})}><option value="2026">2026</option><option value="2027">2027</option></select></div>
+              </div>
+            </div>
+          )}
           <div style={S.fRow}><label style={S.lbl}>City</label><select style={{...S.inp, cursor: "pointer"}} value={form.city} onChange={e => setForm({...form, city: e.target.value})}><option value="">Select a city</option>{CITIES.map(c => <option key={c.name} value={c.name}>{c.emoji} {c.name}</option>)}</select></div>
           {isS ? (
             <div style={S.fRow}>
@@ -623,7 +752,7 @@ export default function App() {
           {isS && (<div style={S.fRow}><label style={S.lbl}>Gender Preference</label><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{GENDER_PREFS.map(g => <button key={g} style={{...S.tOpt, ...(form.genderPref === g ? S.tAct : {})}} onClick={() => setForm({...form, genderPref: g})}>{g}</button>)}</div></div>)}
           <div style={S.fRow}><label style={S.lbl}>Lifestyle Tags</label><div style={S.tSel}>{LIFESTYLE_TAGS.map(t => <button key={t} style={{...S.tOpt, ...((form.lifestyle || []).includes(t) ? S.tAct : {})}} onClick={() => { const ls = form.lifestyle || []; setForm({...form, lifestyle: ls.includes(t) ? ls.filter(x => x !== t) : [...ls, t]}); }}>{t}</button>)}</div></div>
           <div style={S.fRow}><label style={S.lbl}>{isS ? "Notes (anything else classmates should know)" : "Description"}</label><textarea style={S.tArea} placeholder={isS ? "What company, any other preferences, etc." : "Tell classmates about the apartment..."} value={isS ? (form.note || "") : (form.description || "")} onChange={e => setForm({...form, [isS ? "note" : "description"]: e.target.value})} /></div>
-          <button style={{...S.btn, marginTop: 8}} onClick={() => submitPost(type)}>{editingPostId ? "Save Changes" : (isS ? "Post Housing Search" : "List Sublet")} →</button>
+          <button style={{...S.btn, marginTop: 8}} onClick={() => isAdminMode ? adminSubmitPost(type) : submitPost(type)}>{editingPostId ? "Save Changes" : (isS ? "Post Housing Search" : "List Sublet")} →</button>
         </div>
       </div>
     );
@@ -655,19 +784,64 @@ export default function App() {
     );
   }
 
+  // ─── ADMIN PANEL ───
+  function renderAdminPanel() {
+    const sorted = [...posts].sort((a, b) => b.createdAt - a.createdAt);
+    return (
+      <div style={S.box}>
+        <h1 style={S.h1}>All Posts</h1>
+        <p style={S.sub}>{sorted.length} total · {posts.filter(p => p.type === "search").length} searches · {posts.filter(p => p.type === "sublet").length} sublets</p>
+        {sorted.length === 0 ? (
+          <div style={S.empty}><div style={{ fontSize: 48, marginBottom: 16 }}>📋</div><div>No posts yet. Add the first one!</div></div>
+        ) : sorted.map(p => (
+          <div key={p.id} style={S.card}>
+            <div style={S.cH}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: p.type === "search" ? "#c45d3e" : "#2d7a2d", textTransform: "uppercase", letterSpacing: "0.5px" }}>{p.type === "search" ? "Looking" : "Sublet"}</span>
+                <div style={{...S.cNm, marginTop: 2}}>{p.name} · {p.city}</div>
+                <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>{p.email} · Class of {p.classYear}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{...S.delBtn, color: "#4361b8", borderColor: "#c0c8e8"}} onClick={() => adminStartEdit(p)}>Edit</button>
+                <button style={S.delBtn} onClick={() => adminDeletePost(p.id)}>Delete</button>
+              </div>
+            </div>
+            <div style={S.meta}>
+              <span>📅 {formatDate(p.moveIn)} – {formatDate(p.moveOut)}</span>
+              {p.type === "search" ? <span>💰 Up to ${p.budgetMax}/mo</span> : <span>💰 ${p.price}/mo</span>}
+              {p.type === "sublet" && p.address && <span>📍 {p.address}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   // ─── MAIN ───
   return (
     <div style={S.app}>
       <div style={S.header}>
-        <div style={S.logo} onClick={() => setView("cities")}>gsb<span style={S.logoAcc}>house</span></div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button style={{...S.navBtn, ...(view === "my-posts" ? S.navAct : {})}} onClick={() => setView("my-posts")}>My Posts {myPosts.length > 0 && <span style={{ fontWeight: 700, marginLeft: 4 }}>({myPosts.length})</span>}</button>
-          <div style={{ fontSize: 14, color: "#7a7a7a" }}>{user.name}</div>
-          <button style={{...S.navBtn, fontSize: 12, padding: "6px 12px"}} onClick={handleLogout}>Sign Out</button>
-        </div>
+        <div style={S.logo} onClick={() => setView("cities")}>gsb<span style={S.logoAcc}>house</span>{isAdminMode && <span style={{ fontSize: 11, fontWeight: 400, color: "#999", marginLeft: 6 }}>admin</span>}</div>
+        {isAdminMode && adminUnlocked ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button style={S.postBtn} onClick={() => adminStartPost("search")}>+ Search Post</button>
+            <button style={{...S.postBtn, background: "#1a1a1a"}} onClick={() => adminStartPost("sublet")}>+ Sublet</button>
+            <button style={{...S.navBtn, fontSize: 12, padding: "6px 12px"}} onClick={() => { setAdminUnlocked(false); setAdminSecret(""); setAdminSecretInput(""); }}>Lock</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button style={{...S.navBtn, ...(view === "my-posts" ? S.navAct : {})}} onClick={() => setView("my-posts")}>My Posts {myPosts.length > 0 && <span style={{ fontWeight: 700, marginLeft: 4 }}>({myPosts.length})</span>}</button>
+            <div style={{ fontSize: 14, color: "#7a7a7a" }}>{user.name}</div>
+            <button style={{...S.navBtn, fontSize: 12, padding: "6px 12px"}} onClick={handleLogout}>Sign Out</button>
+          </div>
+        )}
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 80, color: "#999" }}>Loading...</div>
-      : view === "cities" ? (
+      : isAdminMode && adminUnlocked ? (
+        view === "post-search" ? renderPostForm("search")
+        : view === "post-sublet" ? renderPostForm("sublet")
+        : renderAdminPanel()
+      ) : view === "cities" ? (
         <div style={S.box}>
           <h1 style={S.h1}>Where are you headed?</h1>
           <p style={S.sub}>Pick a city to see who's looking for roommates and what sublets are available.</p>

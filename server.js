@@ -130,6 +130,11 @@ async function authenticate(req) {
   return rows.length > 0 ? rows[0].email : null;
 }
 
+// ─── ADMIN AUTH ───
+function adminAuth(req) {
+  return !!(process.env.ADMIN_SECRET && req.headers["x-admin-secret"] === process.env.ADMIN_SECRET);
+}
+
 // ─── POST MAPPER ───
 export function rowToPost(row) {
   const post = {
@@ -306,6 +311,64 @@ app.delete("/api/user", async (req, res) => {
   return res.json({ success: true });
 });
 
+// GET /api/admin/verify
+app.get("/api/admin/verify", (req, res) => {
+  if (!process.env.ADMIN_SECRET) return res.status(503).json({ error: "Admin not configured" });
+  if (!adminAuth(req)) return res.status(401).json({ error: "Invalid admin secret" });
+  return res.json({ ok: true });
+});
+
+// POST /api/admin/posts
+app.post("/api/admin/posts", async (req, res) => {
+  if (!process.env.ADMIN_SECRET) return res.status(503).json({ error: "Admin not configured" });
+  if (!adminAuth(req)) return res.status(401).json({ error: "Invalid admin secret" });
+
+  const { personName, personEmail, personPhone, personClassYear, ...data } = req.body;
+  if (!personName || !personEmail || !data.type || !data.city || !data.moveIn || !data.moveOut) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  if (!["2026", "2027"].includes(personClassYear)) {
+    return res.status(400).json({ error: "Invalid class year" });
+  }
+  if (data.type === "sublet" && !data.price) {
+    return res.status(400).json({ error: "Price is required for sublets" });
+  }
+
+  const id = "p" + Date.now() + Math.random().toString(36).slice(2, 6);
+  const createdAt = Date.now();
+
+  if (data.type === "search") {
+    await sql`
+      INSERT INTO posts (
+        id, type, name, email, phone, class_year, city, move_in, move_out, lifestyle, created_at,
+        neighborhoods, budget_max, gender_pref, furnished, beds, baths, bath_privacy, note
+      ) VALUES (
+        ${id}, 'search', ${personName}, ${personEmail}, ${personPhone || ""}, ${personClassYear},
+        ${data.city}, ${data.moveIn}, ${data.moveOut}, ${JSON.stringify(data.lifestyle || [])}, ${createdAt},
+        ${data.neighborhoods || ""}, ${parseInt(data.budgetMax) || 0}, ${data.genderPref || "No preference"},
+        ${data.furnished || "Either"}, ${JSON.stringify(data.beds || [])}, ${JSON.stringify(data.baths || [])},
+        ${data.bathPrivacy || "Shared bath OK"}, ${data.note || ""}
+      )
+    `;
+  } else {
+    await sql`
+      INSERT INTO posts (
+        id, type, name, email, phone, class_year, city, move_in, move_out, lifestyle, created_at,
+        address, price, beds_avail, beds, baths, bath_privacy, furnished, description
+      ) VALUES (
+        ${id}, 'sublet', ${personName}, ${personEmail}, ${personPhone || ""}, ${personClassYear},
+        ${data.city}, ${data.moveIn}, ${data.moveOut}, ${JSON.stringify(data.lifestyle || [])}, ${createdAt},
+        ${data.address || ""}, ${parseInt(data.price) || 0}, ${parseInt(data.bedsAvail) || 1},
+        ${JSON.stringify(data.beds || "")}, ${JSON.stringify(data.baths || "")},
+        ${data.bathPrivacy || "Shared bath"}, ${data.furnished || "Either"}, ${data.description || ""}
+      )
+    `;
+  }
+
+  const newRows = await sql`SELECT * FROM posts WHERE id = ${id}`;
+  return res.status(201).json({ post: rowToPost(newRows[0]) });
+});
+
 // GET /api/posts
 app.get("/api/posts", async (req, res) => {
   const rows = await sql`SELECT * FROM posts ORDER BY created_at DESC`;
@@ -366,15 +429,16 @@ app.post("/api/posts", async (req, res) => {
 
 // PUT /api/posts
 app.put("/api/posts", async (req, res) => {
-  const email = await authenticate(req);
-  if (!email) return res.status(401).json({ error: "Not authenticated" });
+  const isAdmin = adminAuth(req);
+  const email = isAdmin ? null : await authenticate(req);
+  if (!isAdmin && !email) return res.status(401).json({ error: "Not authenticated" });
 
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: "Post ID is required" });
 
   const rows = await sql`SELECT * FROM posts WHERE id = ${id}`;
   if (rows.length === 0) return res.status(404).json({ error: "Post not found" });
-  if (rows[0].email !== email) return res.status(403).json({ error: "You can only edit your own posts" });
+  if (!isAdmin && rows[0].email !== email) return res.status(403).json({ error: "You can only edit your own posts" });
 
   const data = req.body;
   if (!data.moveIn || !data.moveOut) return res.status(400).json({ error: "Missing required fields" });
@@ -418,15 +482,16 @@ app.put("/api/posts", async (req, res) => {
 
 // DELETE /api/posts
 app.delete("/api/posts", async (req, res) => {
-  const email = await authenticate(req);
-  if (!email) return res.status(401).json({ error: "Not authenticated" });
+  const isAdmin = adminAuth(req);
+  const email = isAdmin ? null : await authenticate(req);
+  if (!isAdmin && !email) return res.status(401).json({ error: "Not authenticated" });
 
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: "Post ID is required" });
 
   const rows = await sql`SELECT email FROM posts WHERE id = ${id}`;
   if (rows.length === 0) return res.status(404).json({ error: "Post not found" });
-  if (rows[0].email !== email) return res.status(403).json({ error: "You can only delete your own posts" });
+  if (!isAdmin && rows[0].email !== email) return res.status(403).json({ error: "You can only delete your own posts" });
 
   await sql`DELETE FROM posts WHERE id = ${id}`;
   return res.json({ success: true });
