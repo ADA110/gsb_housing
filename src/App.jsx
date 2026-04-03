@@ -120,8 +120,8 @@ export default function App() {
 
   // ─── AUTH FLOW ───
   async function handleSendCode() {
-    if (!authEmail.endsWith("@stanford.edu")) {
-      setAuthError("Please use your @stanford.edu email");
+    if (!authEmail.match(/@.+\.edu$/i)) {
+      setAuthError("Please use a .edu email address");
       return;
     }
     setAuthLoading(true);
@@ -481,11 +481,11 @@ export default function App() {
             {/* Step 1: Email */}
             {authStep === "email" && (<>
               <div style={S.authH}>Find your people,<br/>find your place.</div>
-              <div style={S.authP}>Housing matching for GSB students. We'll send a verification code to your Stanford email.</div>
+              <div style={S.authP}>Housing matching for GSB students. We'll send a verification code to your .edu email.</div>
               {authError && <div style={S.errMsg}>{authError}</div>}
               <div style={S.fRow}>
                 <label style={S.lbl}>Stanford Email</label>
-                <input style={S.inp} type="email" placeholder="you@stanford.edu" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthError(""); }} onKeyDown={e => e.key === "Enter" && !authLoading && handleSendCode()} />
+                <input style={S.inp} type="email" placeholder="you@university.edu" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthError(""); }} onKeyDown={e => e.key === "Enter" && !authLoading && handleSendCode()} />
               </div>
               <button style={authLoading ? S.btnDisabled : S.btn} onClick={handleSendCode} disabled={authLoading}>
                 {authLoading ? "Sending code..." : "Send verification code →"}
@@ -712,7 +712,7 @@ export default function App() {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#4361b8", marginBottom: 12 }}>Posting on behalf of</div>
               <div style={S.fGrid}>
                 <div style={S.fRow}><label style={S.lbl}>Full Name</label><input style={S.inp} placeholder="Student name" value={adminPerson.name} onChange={e => setAdminPerson({...adminPerson, name: e.target.value})} /></div>
-                <div style={S.fRow}><label style={S.lbl}>Email</label><input style={S.inp} placeholder="student@stanford.edu" value={adminPerson.email} onChange={e => setAdminPerson({...adminPerson, email: e.target.value})} /></div>
+                <div style={S.fRow}><label style={S.lbl}>Email</label><input style={S.inp} placeholder="student@university.edu" value={adminPerson.email} onChange={e => setAdminPerson({...adminPerson, email: e.target.value})} /></div>
               </div>
               <div style={S.fGrid}>
                 <div style={S.fRow}><label style={S.lbl}>Phone (optional)</label><input style={S.inp} placeholder="(555) 123-4567" value={adminPerson.phone} onChange={e => setAdminPerson({...adminPerson, phone: e.target.value})} /></div>

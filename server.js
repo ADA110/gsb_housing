@@ -193,8 +193,8 @@ if (process.env.RESEND_API_KEY && !process.env.DEV_MODE) {
 // POST /api/send-code
 app.post("/api/send-code", async (req, res) => {
   const { email } = req.body;
-  if (!email || !email.endsWith("@stanford.edu")) {
-    return res.status(400).json({ error: "Must use a @stanford.edu email" });
+  if (!email || !email.match(/@.+\.edu$/i)) {
+    return res.status(400).json({ error: "Must use a .edu email address" });
   }
 
   const rateRows = await sql`
@@ -253,7 +253,7 @@ app.post("/api/send-code", async (req, res) => {
 app.post("/api/verify-code", async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: "Email and code are required" });
-  if (!email.endsWith("@stanford.edu")) return res.status(400).json({ error: "Must use a @stanford.edu email" });
+  if (!email.match(/@.+\.edu$/i)) return res.status(400).json({ error: "Must use a .edu email address" });
 
   const rows = await sql`
     SELECT code FROM codes WHERE email = ${email} AND expires_at > ${Date.now()}
