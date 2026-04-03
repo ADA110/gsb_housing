@@ -481,7 +481,7 @@ export default function App() {
             {/* Step 1: Email */}
             {authStep === "email" && (<>
               <div style={S.authH}>Find your people,<br/>find your place.</div>
-              <div style={S.authP}>Housing matching for GSB students. We'll send a verification code to your .edu email.</div>
+              <div style={S.authP}>Housing matching for students. We'll send a verification code to your school email.</div>
               {authError && <div style={S.errMsg}>{authError}</div>}
               <div style={S.fRow}>
                 <label style={S.lbl}>Stanford Email</label>
@@ -540,7 +540,7 @@ export default function App() {
               <div style={S.fRow}>
                 <label style={S.lbl}>Class Year</label>
                 <select style={{...S.inp, cursor: "pointer"}} value={authYear} onChange={e => setAuthYear(e.target.value)}>
-                  <option value="2026">2026</option><option value="2027">2027</option>
+                  <option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option>
                 </select>
               </div>
               <button style={authLoading ? S.btnDisabled : S.btn} onClick={handleCreateProfile} disabled={authLoading}>
@@ -716,7 +716,7 @@ export default function App() {
               </div>
               <div style={S.fGrid}>
                 <div style={S.fRow}><label style={S.lbl}>Phone (optional)</label><input style={S.inp} placeholder="(555) 123-4567" value={adminPerson.phone} onChange={e => setAdminPerson({...adminPerson, phone: e.target.value})} /></div>
-                <div style={S.fRow}><label style={S.lbl}>Class Year</label><select style={{...S.inp, cursor: "pointer"}} value={adminPerson.classYear} onChange={e => setAdminPerson({...adminPerson, classYear: e.target.value})}><option value="2026">2026</option><option value="2027">2027</option></select></div>
+                <div style={S.fRow}><label style={S.lbl}>Class Year</label><select style={{...S.inp, cursor: "pointer"}} value={adminPerson.classYear} onChange={e => setAdminPerson({...adminPerson, classYear: e.target.value})}><option value="2026">2026</option><option value="2027">2027</option><option value="2028">2028</option></select></div>
               </div>
             </div>
           )}

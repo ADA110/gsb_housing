@@ -291,7 +291,7 @@ app.post("/api/user", async (req, res) => {
 
   const { name, phone, classYear } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: "Name is required" });
-  if (!["2026", "2027"].includes(classYear)) return res.status(400).json({ error: "Invalid class year" });
+  if (!["2026", "2027", "2028"].includes(classYear)) return res.status(400).json({ error: "Invalid class year" });
 
   await sql`
     INSERT INTO users (email, name, phone, class_year)
