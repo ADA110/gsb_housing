@@ -484,7 +484,7 @@ export default function App() {
               <div style={S.authP}>Housing matching for students. We'll send a verification code to your school email.</div>
               {authError && <div style={S.errMsg}>{authError}</div>}
               <div style={S.fRow}>
-                <label style={S.lbl}>Stanford Email</label>
+                <label style={S.lbl}>School Email</label>
                 <input style={S.inp} type="email" placeholder="you@university.edu" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthError(""); }} onKeyDown={e => e.key === "Enter" && !authLoading && handleSendCode()} />
               </div>
               <button style={authLoading ? S.btnDisabled : S.btn} onClick={handleSendCode} disabled={authLoading}>
